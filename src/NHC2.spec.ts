@@ -10,6 +10,7 @@ import {
   BRIGHTNESS_CHANGED_EVENT,
   buildEvent,
   FAN_SPEED_EVENT,
+  MOVING_EVENT,
   POSITION_CHANGED_EVENT,
   STATUS_CHANGED_EVENT,
   TRIGGER_BASIC_STATE_EVENT,
@@ -33,12 +34,12 @@ describe('NHC2', () => {
 
   describe('getAccessories', () => {
     it('should send the list devices command', async done => {
-      fakeMqttServer.server.on('published', function(packet, client) {
+      fakeMqttServer.broker.subscribe(LIST_DEVICES_COMMAND_TOPIC, (packet, _) => {
         if (packet.topic === LIST_DEVICES_COMMAND_TOPIC) {
           expect(packet.payload.toString()).toBe('{"Method":"devices.list"}');
           done();
         }
-      });
+      }, noop);
 
       await nhc2.getAccessories();
     });
@@ -68,27 +69,27 @@ describe('NHC2', () => {
 
   describe('sendStatusChangeCommand', () => {
     it('should send the status change command for device with value true', async done => {
-      fakeMqttServer.server.on('published', function(packet, client) {
+      fakeMqttServer.broker.subscribe(STATUS_CHANGE_COMMAND_TOPIC, (packet, _) => {
         if (packet.topic === STATUS_CHANGE_COMMAND_TOPIC) {
           expect(packet.payload.toString()).toBe(
             '{"Method":"devices.control","Params":[{"Devices":[{"Uuid":"488d61fa-de6c-4b1c-a832-f1971dc12110","Properties":[{"Status":"On"}]}]}]}',
           );
           done();
         }
-      });
+      }, noop);
 
       nhc2.sendStatusChangeCommand('488d61fa-de6c-4b1c-a832-f1971dc12110', true);
     });
 
     it('should send the status change command for device with value true', async done => {
-      fakeMqttServer.server.on('published', function(packet, client) {
+      fakeMqttServer.broker.subscribe(STATUS_CHANGE_COMMAND_TOPIC, (packet, _) => {
         if (packet.topic === STATUS_CHANGE_COMMAND_TOPIC) {
           expect(packet.payload.toString()).toBe(
             '{"Method":"devices.control","Params":[{"Devices":[{"Uuid":"488d61fa-de6c-4b1c-a832-f1971dc12110","Properties":[{"Status":"Off"}]}]}]}',
           );
           done();
         }
-      });
+      }, noop);
 
       nhc2.sendStatusChangeCommand('488d61fa-de6c-4b1c-a832-f1971dc12110', false);
     });
@@ -96,14 +97,14 @@ describe('NHC2', () => {
 
   describe('sendBrightnessChangeCommand', () => {
     it('should send the brightness change command for device with value 50', async done => {
-      fakeMqttServer.server.on('published', function(packet, client) {
+      fakeMqttServer.broker.subscribe(BRIGHTNESS_CHANGE_COMMAND_TOPIC, (packet, _) => {
         if (packet.topic === BRIGHTNESS_CHANGE_COMMAND_TOPIC) {
           expect(packet.payload.toString()).toBe(
             '{"Method":"devices.control","Params":[{"Devices":[{"Uuid":"abd4b98b-f197-42ed-a51a-1681b9176228","Properties":[{"Brightness":"50"}]}]}]}',
           );
           done();
         }
-      });
+      }, noop);
 
       nhc2.sendBrightnessChangeCommand('abd4b98b-f197-42ed-a51a-1681b9176228', 50);
     });
@@ -111,14 +112,14 @@ describe('NHC2', () => {
 
   describe('sendPositionChangeCommand', () => {
     it('should send the position change command for device with value 50', async done => {
-      fakeMqttServer.server.on('published', function(packet, client) {
+      fakeMqttServer.broker.subscribe(POSITION_CHANGE_COMMAND_TOPIC, (packet, _) => {
         if (packet.topic === POSITION_CHANGE_COMMAND_TOPIC) {
           expect(packet.payload.toString()).toBe(
             '{"Method":"devices.control","Params":[{"Devices":[{"Uuid":"abd4b98b-f197-42ed-a51a-1681b9176228","Properties":[{"Position":"50"}]}]}]}',
           );
           done();
         }
-      });
+      }, noop);
 
       nhc2.sendPositionChangeCommand('abd4b98b-f197-42ed-a51a-1681b9176228', 50);
     });
@@ -144,7 +145,7 @@ describe('NHC2', () => {
           done();
         });
 
-        fakeMqttServer.server.publish(buildEvent(FAN_SPEED_EVENT), noop);
+        fakeMqttServer.broker.publish(buildEvent(FAN_SPEED_EVENT), noop);
       });
     });
 
@@ -167,7 +168,7 @@ describe('NHC2', () => {
           done();
         });
 
-        fakeMqttServer.server.publish(buildEvent(BRIGHTNESS_CHANGED_EVENT), noop);
+        fakeMqttServer.broker.publish(buildEvent(BRIGHTNESS_CHANGED_EVENT), noop);
       });
     });
 
@@ -190,7 +191,30 @@ describe('NHC2', () => {
           done();
         });
 
-        fakeMqttServer.server.publish(buildEvent(STATUS_CHANGED_EVENT), noop);
+        fakeMqttServer.broker.publish(buildEvent(STATUS_CHANGED_EVENT), noop);
+      });
+    });
+
+    describe('moving event', () => {
+      it('should emit the moving event', done => {
+        nhc2.getEvents().subscribe(event => {
+          expect(event).toStrictEqual({
+            Method: Method.DEVICES_STATUS,
+            Params: [
+              {
+                Devices: [
+                  {
+                    Properties: [{ Moving: 'True' }],
+                    Uuid: '25ee33e3-5b9c-4171-8ede-7e94f1cb6b33',
+                  },
+                ],
+              },
+            ],
+          });
+          done();
+        });
+
+        fakeMqttServer.broker.publish(buildEvent(MOVING_EVENT), noop);
       });
     });
 
@@ -213,7 +237,7 @@ describe('NHC2', () => {
           done();
         });
 
-        fakeMqttServer.server.publish(buildEvent(POSITION_CHANGED_EVENT), noop);
+        fakeMqttServer.broker.publish(buildEvent(POSITION_CHANGED_EVENT), noop);
       });
     });
 
@@ -236,34 +260,36 @@ describe('NHC2', () => {
           done();
         });
 
-        fakeMqttServer.server.publish(buildEvent(TRIGGER_BASIC_STATE_EVENT), noop);
+        fakeMqttServer.broker.publish(buildEvent(TRIGGER_BASIC_STATE_EVENT), noop);
       });
 
       it('should send the basic state change command for device', async done => {
-        fakeMqttServer.server.on('published', function(packet, client) {
+        fakeMqttServer.broker.subscribe(STATUS_CHANGE_COMMAND_TOPIC, (packet, _) => {
           if (packet.topic === STATUS_CHANGE_COMMAND_TOPIC) {
             expect(packet.payload.toString()).toBe(
               '{"Method":"devices.control","Params":[{"Devices":[{"Uuid":"abd4b98b-f197-42ed-a51a-1681b9176228","Properties":[{"BasicState":"Triggered"}]}]}]}',
             );
             done();
           }
-        });
+        }, noop);
 
         nhc2.sendTriggerBasicStateCommand('abd4b98b-f197-42ed-a51a-1681b9176228');
       });
+    });
 
+    describe('fan speed event', () => {
       it('should send the fan speed change command', async done => {
-        fakeMqttServer.server.on('published', function(packet, client) {
+        fakeMqttServer.broker.subscribe(STATUS_CHANGE_COMMAND_TOPIC, (packet, _) => {
           if (packet.topic === STATUS_CHANGE_COMMAND_TOPIC) {
             expect(packet.payload.toString()).toBe(
               '{"Method":"devices.control","Params":[{"Devices":[{"Uuid":"abd4b98b-f197-42ed-a51a-1681b9176228","Properties":[{"FanSpeed":"Medium"}]}]}]}',
             );
             done();
           }
-        });
+        }, noop);
 
         nhc2.sendFanSpeedCommand('abd4b98b-f197-42ed-a51a-1681b9176228', FanSpeed.Medium);
       });
-    });
+    })
   });
 });

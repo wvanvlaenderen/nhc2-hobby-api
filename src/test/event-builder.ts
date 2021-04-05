@@ -58,6 +58,20 @@ export const TRIGGER_BASIC_STATE_EVENT: Event = {
   ],
 };
 
+export const MOVING_EVENT: Event = {
+  Method: Method.DEVICES_STATUS,
+  Params: [
+    {
+      Devices: [
+        {
+          Properties: [{ Moving: "True" }],
+          Uuid: '25ee33e3-5b9c-4171-8ede-7e94f1cb6b33',
+        },
+      ],
+    },
+  ],
+};
+
 export const FAN_SPEED_EVENT: Event = {
   Method: Method.DEVICES_STATUS,
   Params: [
@@ -113,8 +127,10 @@ export const LIST_DEVICS_EVENT: Event = {
 };
 
 export const buildEvent = (event: Event) => ({
+  cmd: 'publish' as const,
+  dup: false,
   topic: 'hobby/control/devices/evt',
   payload: JSON.stringify(event),
-  qos: 0,
+  qos: 0 as const,
   retain: false,
 });
